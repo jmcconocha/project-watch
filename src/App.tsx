@@ -4,6 +4,7 @@ import { AppShell } from './components/layout'
 import { ToastContainer } from './components/ui'
 import { useSettingsStore } from './stores'
 import { useGitRefresh, useGitHubRefresh } from './hooks'
+import { initNotifications } from './services'
 import {
   Dashboard,
   ProjectsBoard,
@@ -17,6 +18,11 @@ import {
 
 function App() {
   const theme = useSettingsStore((state) => state.theme)
+
+  // Initialize notifications on app startup
+  useEffect(() => {
+    initNotifications()
+  }, [])
 
   // Enable periodic git status refresh (uses settings for interval)
   useGitRefresh()

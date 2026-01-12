@@ -1,6 +1,11 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { useProjectStore, useSettingsStore } from '../stores'
-import { getGitStatus, isTauri } from '../services'
+import {
+  getGitStatus,
+  isTauri,
+  notifyUncommittedChanges,
+  notifyBehindRemote,
+} from '../services'
 
 interface UseGitRefreshOptions {
   /** Refresh interval in milliseconds (overrides settings if provided) */
@@ -9,10 +14,16 @@ interface UseGitRefreshOptions {
   enabled?: boolean
 }
 
+interface GitStatusSnapshot {
+  uncommittedFiles: number
+  commitsBehind: number
+}
+
 export function useGitRefresh(options: UseGitRefreshOptions = {}) {
   // Get settings from store
   const autoRefreshEnabled = useSettingsStore((state) => state.autoRefreshEnabled)
   const autoRefreshInterval = useSettingsStore((state) => state.autoRefreshInterval)
+  const notifications = useSettingsStore((state) => state.notifications)
 
   // Use options if provided, otherwise fall back to settings
   const enabled = options.enabled ?? autoRefreshEnabled
@@ -22,6 +33,9 @@ export function useGitRefresh(options: UseGitRefreshOptions = {}) {
   const updateProject = useProjectStore((state) => state.updateProject)
   const isRefreshing = useRef(false)
   const lastRefresh = useRef<Date | null>(null)
+
+  // Track previous status for change detection
+  const previousStatus = useRef<Map<string, GitStatusSnapshot>>(new Map())
 
   const refreshGitStatus = useCallback(async () => {
     if (!isTauri() || isRefreshing.current || projects.length === 0) {
@@ -44,6 +58,39 @@ export function useGitRefresh(options: UseGitRefreshOptions = {}) {
           chunk.map(async (project) => {
             try {
               const status = await getGitStatus(project.localPath)
+
+              // Get previous status for comparison
+              const prevStatus = previousStatus.current.get(project.id)
+              const newUncommittedFiles = status.uncommitted_files
+              const newCommitsBehind = status.commits_behind
+
+              // Check for notification-worthy changes
+              if (notifications.enabled && prevStatus) {
+                // Notify about new uncommitted changes
+                if (
+                  notifications.gitStatusChanges &&
+                  newUncommittedFiles > 0 &&
+                  prevStatus.uncommittedFiles === 0
+                ) {
+                  await notifyUncommittedChanges(project.name, newUncommittedFiles)
+                }
+
+                // Notify about being behind remote
+                if (
+                  notifications.gitStatusChanges &&
+                  newCommitsBehind > 0 &&
+                  prevStatus.commitsBehind === 0
+                ) {
+                  await notifyBehindRemote(project.name, newCommitsBehind)
+                }
+              }
+
+              // Update previous status snapshot
+              previousStatus.current.set(project.id, {
+                uncommittedFiles: newUncommittedFiles,
+                commitsBehind: newCommitsBehind,
+              })
+
               updateProject(project.id, {
                 git: {
                   branch: status.branch,
@@ -66,7 +113,7 @@ export function useGitRefresh(options: UseGitRefreshOptions = {}) {
     } finally {
       isRefreshing.current = false
     }
-  }, [projects, updateProject])
+  }, [projects, updateProject, notifications.enabled, notifications.gitStatusChanges])
 
   // Set up periodic refresh
   useEffect(() => {
