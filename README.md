@@ -1,73 +1,95 @@
-# React + TypeScript + Vite
+# Project Watch
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A native macOS app for tracking and managing your local development projects with GitHub integration.
 
-Currently, two official plugins are available:
+![Project Watch](https://img.shields.io/badge/Platform-macOS-blue) ![Version](https://img.shields.io/badge/Version-1.0.0-green) ![License](https://img.shields.io/badge/License-MIT-yellow)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Features
 
-## React Compiler
+- **Project Discovery** - Automatically scan folders for git repositories
+- **Git Status Monitoring** - See branch, uncommitted changes, commits ahead/behind at a glance
+- **GitHub Integration** - Connect with PAT to view open PRs and issues
+- **Kanban Board** - Organize projects by status (Active, On Hold, Completed, Archived)
+- **Quick Actions** - Open projects in VS Code, Terminal, Finder, or GitHub with one click
+- **Native Performance** - Built with Tauri for a fast, lightweight experience (~12MB)
+- **Dark Mode** - Full light/dark theme support
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Installation
 
-## Expanding the ESLint configuration
+### Download
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+Download the latest `.dmg` from [Releases](https://github.com/jmcconocha/project-watch/releases).
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### Build from Source
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+```bash
+# Clone the repo
+git clone https://github.com/jmcconocha/project-watch.git
+cd project-watch/project-watch
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# Install dependencies
+npm install
+
+# Run in development
+npm run tauri:dev
+
+# Build for production
+npm run tauri:build
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Tech Stack
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+- **Frontend**: React 19, TypeScript, Tailwind CSS v4
+- **Backend**: Tauri v2 (Rust)
+- **State Management**: Zustand
+- **UI Components**: Custom components with Lucide icons
+- **Drag & Drop**: dnd-kit
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Usage
+
+1. **Scan Projects** - Go to Settings → Projects → Choose Folder to Scan
+2. **Connect GitHub** - Go to Settings → GitHub → Enter your PAT
+3. **Manage Projects** - Use the Projects Board to organize by status
+4. **Quick Actions** - Click project cards for quick access to editor, terminal, etc.
+
+## Development
+
+```bash
+# Start dev server (hot reload)
+npm run tauri:dev
+
+# Type check
+npm run build
+
+# Lint
+npm run lint
+
+# Production build
+npm run tauri:build
 ```
+
+## Project Structure
+
+```
+project-watch/
+├── src/                    # React frontend
+│   ├── components/         # Shared UI components
+│   ├── features/           # Feature modules
+│   ├── pages/              # Route pages
+│   ├── services/           # Tauri API services
+│   └── stores/             # Zustand stores
+├── src-tauri/              # Rust backend
+│   ├── src/
+│   │   ├── lib.rs          # Tauri commands
+│   │   └── main.rs         # Entry point
+│   └── tauri.conf.json     # Tauri config
+└── package.json
+```
+
+## License
+
+MIT
+
+## Author
+
+Built by [@jmcconocha](https://github.com/jmcconocha)

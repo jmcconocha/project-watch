@@ -39,6 +39,9 @@
     ],
     "category": "DeveloperTool",
     "shortDescription": "Project management for developers",
-    "longDescription": "A native Mac app for tracking and managing your development projects with GitHub integration."
+    "longDescription": "A native Mac app for tracking and managing your development projects with GitHub integration.",
+    "macOS": {
+      "signingIdentity": "Developer ID Application: Jeffrey Mcconocha (G98AX8B2QD)"
+    }
   }
 }
