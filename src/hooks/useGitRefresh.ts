@@ -1,16 +1,22 @@
 import { useEffect, useRef, useCallback } from 'react'
-import { useProjectStore } from '../stores'
+import { useProjectStore, useSettingsStore } from '../stores'
 import { getGitStatus, isTauri } from '../services'
 
 interface UseGitRefreshOptions {
-  /** Refresh interval in milliseconds (default: 30 seconds) */
+  /** Refresh interval in milliseconds (overrides settings if provided) */
   interval?: number
-  /** Whether to enable auto-refresh (default: true) */
+  /** Whether to enable auto-refresh (overrides settings if provided) */
   enabled?: boolean
 }
 
 export function useGitRefresh(options: UseGitRefreshOptions = {}) {
-  const { interval = 30000, enabled = true } = options
+  // Get settings from store
+  const autoRefreshEnabled = useSettingsStore((state) => state.autoRefreshEnabled)
+  const autoRefreshInterval = useSettingsStore((state) => state.autoRefreshInterval)
+
+  // Use options if provided, otherwise fall back to settings
+  const enabled = options.enabled ?? autoRefreshEnabled
+  const interval = options.interval ?? (autoRefreshInterval * 60 * 1000) // Convert minutes to ms
 
   const projects = useProjectStore((state) => state.projects)
   const updateProject = useProjectStore((state) => state.updateProject)

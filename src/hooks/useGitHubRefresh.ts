@@ -11,7 +11,14 @@ interface UseGitHubRefreshOptions {
 }
 
 export function useGitHubRefresh(options: UseGitHubRefreshOptions = {}) {
-  const { interval = 300000, enabled = true } = options // 5 minutes default
+  // Get settings from store
+  const autoRefreshEnabled = useSettingsStore((state) => state.autoRefreshEnabled)
+  const autoRefreshInterval = useSettingsStore((state) => state.autoRefreshInterval)
+
+  // GitHub refresh is less frequent - use 2x the git refresh interval (minimum 5 minutes)
+  const defaultInterval = Math.max(autoRefreshInterval * 2, 5) * 60 * 1000
+  const enabled = options.enabled ?? autoRefreshEnabled
+  const interval = options.interval ?? defaultInterval
 
   const projects = useProjectStore((state) => state.projects)
   const updateProject = useProjectStore((state) => state.updateProject)

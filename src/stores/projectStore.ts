@@ -1,12 +1,15 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { BoardProject, BoardStatus } from '../features/projects-board'
+import { getGitStatus } from '../services'
 
 interface ProjectStore {
   // State
   projects: BoardProject[]
   isLoading: boolean
   isScanning: boolean
+  isRefreshing: boolean
+  lastRefreshed: string | null
   error: string | null
 
   // Actions
@@ -20,6 +23,7 @@ interface ProjectStore {
   setScanning: (scanning: boolean) => void
   setError: (error: string | null) => void
   clearSampleData: () => void
+  refreshAllGitStatus: () => Promise<void>
 
   // Selectors
   getProjectById: (id: string) => BoardProject | undefined
@@ -34,6 +38,8 @@ export const useProjectStore = create<ProjectStore>()(
       projects: [],
       isLoading: false,
       isScanning: false,
+      isRefreshing: false,
+      lastRefreshed: null,
       error: null,
 
       // Actions
@@ -84,6 +90,54 @@ export const useProjectStore = create<ProjectStore>()(
       setError: (error) => set({ error }),
 
       clearSampleData: () => set({ projects: [] }),
+
+      refreshAllGitStatus: async () => {
+        const projects = get().projects
+        if (projects.length === 0) return
+
+        set({ isRefreshing: true })
+
+        try {
+          // Refresh git status for all projects in parallel
+          const updates = await Promise.all(
+            projects.map(async (project) => {
+              try {
+                const status = await getGitStatus(project.localPath)
+                return {
+                  id: project.id,
+                  git: {
+                    branch: status.branch,
+                    isDirty: status.is_dirty,
+                    uncommittedFiles: status.uncommitted_files,
+                    commitsAhead: status.commits_ahead,
+                    commitsBehind: status.commits_behind,
+                  },
+                  lastActivity: new Date().toISOString(),
+                }
+              } catch (error) {
+                console.warn(`Failed to refresh git status for ${project.name}:`, error)
+                return null
+              }
+            })
+          )
+
+          // Apply updates
+          set((state) => ({
+            projects: state.projects.map((project) => {
+              const update = updates.find((u) => u?.id === project.id)
+              if (update) {
+                return { ...project, git: update.git, lastActivity: update.lastActivity }
+              }
+              return project
+            }),
+            lastRefreshed: new Date().toISOString(),
+            isRefreshing: false,
+          }))
+        } catch (error) {
+          console.error('Failed to refresh git status:', error)
+          set({ isRefreshing: false })
+        }
+      },
 
       // Selectors
       getProjectById: (id) => get().projects.find((p) => p.id === id),

@@ -8,6 +8,8 @@ interface SettingsStore {
   editorId: EditorId
   notifications: NotificationSettings
   github: GitHubAuth
+  autoRefreshEnabled: boolean
+  autoRefreshInterval: number // in minutes
 
   // Actions
   setTheme: (theme: Theme) => void
@@ -15,6 +17,7 @@ interface SettingsStore {
   updateNotifications: (updates: Partial<NotificationSettings>) => void
   setGitHub: (github: GitHubAuth) => void
   disconnectGitHub: () => void
+  setAutoRefresh: (enabled: boolean, interval?: number) => void
 }
 
 const defaultNotifications: NotificationSettings = {
@@ -46,6 +49,8 @@ export const useSettingsStore = create<SettingsStore>()(
       editorId: 'vscode',
       notifications: defaultNotifications,
       github: defaultGitHub,
+      autoRefreshEnabled: true,
+      autoRefreshInterval: 5, // 5 minutes default
 
       // Actions
       setTheme: (theme) => {
@@ -75,6 +80,12 @@ export const useSettingsStore = create<SettingsStore>()(
       setGitHub: (github) => set({ github }),
 
       disconnectGitHub: () => set({ github: defaultGitHub }),
+
+      setAutoRefresh: (enabled, interval) =>
+        set((state) => ({
+          autoRefreshEnabled: enabled,
+          autoRefreshInterval: interval ?? state.autoRefreshInterval,
+        })),
     }),
     {
       name: 'project-watch-settings',

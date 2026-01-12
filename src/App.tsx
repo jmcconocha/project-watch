@@ -18,11 +18,11 @@ import {
 function App() {
   const theme = useSettingsStore((state) => state.theme)
 
-  // Enable periodic git status refresh (every 30 seconds)
-  useGitRefresh({ interval: 30000, enabled: true })
+  // Enable periodic git status refresh (uses settings for interval)
+  useGitRefresh()
 
-  // Enable periodic GitHub status refresh (every 5 minutes)
-  useGitHubRefresh({ interval: 300000, enabled: true })
+  // Enable periodic GitHub status refresh (uses settings for interval)
+  useGitHubRefresh()
 
   // Apply theme on initial load and when it changes
   useEffect(() => {
