@@ -1,0 +1,5 @@
+export { GettingStarted } from './GettingStarted'
+export { Features } from './Features'
+export { Shortcuts } from './Shortcuts'
+export { FAQ } from './FAQ'
+export { About } from './About'

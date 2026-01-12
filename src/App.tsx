@@ -14,6 +14,12 @@ import {
   ProjectsSettings,
   GitHubSettings,
   NotificationsSettings,
+  Help,
+  GettingStarted,
+  Features,
+  Shortcuts,
+  FAQ,
+  About,
 } from './pages'
 
 function App() {
@@ -76,6 +82,15 @@ function App() {
             <Route path="projects" element={<ProjectsSettings />} />
             <Route path="github" element={<GitHubSettings />} />
             <Route path="notifications" element={<NotificationsSettings />} />
+          </Route>
+
+          {/* Help routes */}
+          <Route path="help" element={<Help />}>
+            <Route path="getting-started" element={<GettingStarted />} />
+            <Route path="features" element={<Features />} />
+            <Route path="shortcuts" element={<Shortcuts />} />
+            <Route path="faq" element={<FAQ />} />
+            <Route path="about" element={<About />} />
           </Route>
         </Route>
       </Routes>

@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Kanban, Settings, type LucideIcon } from 'lucide-react'
+import { LayoutDashboard, Kanban, Settings, HelpCircle, type LucideIcon } from 'lucide-react'
 
 export interface NavItem {
   id: string
@@ -18,6 +18,7 @@ const defaultNavItems: NavItem[] = [
   { id: 'board', label: 'Projects Board', href: '/board', icon: Kanban },
   { id: 'dashboard', label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { id: 'settings', label: 'Settings', href: '/settings', icon: Settings },
+  { id: 'help', label: 'Help', href: '/help', icon: HelpCircle },
 ]
 
 export function MainNav({
