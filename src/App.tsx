@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AppShell } from './components/layout'
 import { ToastContainer } from './components/ui'
+import { NavigationListener } from './components/NavigationListener'
 import { useSettingsStore } from './stores'
 import { useGitRefresh, useGitHubRefresh } from './hooks'
 import { initNotifications } from './services'
@@ -66,6 +67,7 @@ function App() {
 
   return (
     <BrowserRouter>
+      <NavigationListener />
       <Routes>
         <Route path="/" element={<AppShell />}>
           {/* Default redirect to board */}

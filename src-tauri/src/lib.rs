@@ -1,9 +1,9 @@
 use std::process::Command;
 use serde::{Deserialize, Serialize};
 use tauri::{
-    menu::{Menu, MenuItem},
+    menu::{Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager,
+    Manager, Emitter,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -272,16 +272,111 @@ pub fn run() {
                 )?;
             }
 
-            // Create tray menu
-            let show_item = MenuItem::with_id(app, "show", "Show Project Watch", true, None::<&str>)?;
-            let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+            // Build the application menu
+            let app_submenu = SubmenuBuilder::new(app, "Project Watch")
+                .item(&PredefinedMenuItem::about(app, Some("About Project Watch"), None)?)
+                .separator()
+                .item(&PredefinedMenuItem::services(app, None)?)
+                .separator()
+                .item(&PredefinedMenuItem::hide(app, Some("Hide Project Watch"))?)
+                .item(&PredefinedMenuItem::hide_others(app, None)?)
+                .item(&PredefinedMenuItem::show_all(app, None)?)
+                .separator()
+                .item(&PredefinedMenuItem::quit(app, Some("Quit Project Watch"))?)
+                .build()?;
 
-            let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+            let file_submenu = SubmenuBuilder::new(app, "File")
+                .item(&PredefinedMenuItem::close_window(app, Some("Close Window"))?)
+                .build()?;
+
+            let edit_submenu = SubmenuBuilder::new(app, "Edit")
+                .item(&PredefinedMenuItem::undo(app, None)?)
+                .item(&PredefinedMenuItem::redo(app, None)?)
+                .separator()
+                .item(&PredefinedMenuItem::cut(app, None)?)
+                .item(&PredefinedMenuItem::copy(app, None)?)
+                .item(&PredefinedMenuItem::paste(app, None)?)
+                .item(&PredefinedMenuItem::select_all(app, None)?)
+                .build()?;
+
+            let view_submenu = SubmenuBuilder::new(app, "View")
+                .item(&PredefinedMenuItem::fullscreen(app, None)?)
+                .build()?;
+
+            let window_submenu = SubmenuBuilder::new(app, "Window")
+                .item(&PredefinedMenuItem::minimize(app, None)?)
+                .item(&PredefinedMenuItem::maximize(app, None)?)
+                .separator()
+                .item(&PredefinedMenuItem::close_window(app, None)?)
+                .build()?;
+
+            // Help menu with custom items
+            let help_item = MenuItemBuilder::with_id("help", "Project Watch Help")
+                .accelerator("CmdOrCtrl+?")
+                .build(app)?;
+            let getting_started_item = MenuItemBuilder::with_id("getting_started", "Getting Started")
+                .build(app)?;
+            let keyboard_shortcuts_item = MenuItemBuilder::with_id("keyboard_shortcuts", "Keyboard Shortcuts")
+                .build(app)?;
+            let report_issue_item = MenuItemBuilder::with_id("report_issue", "Report an Issue...")
+                .build(app)?;
+
+            let help_submenu = SubmenuBuilder::new(app, "Help")
+                .item(&help_item)
+                .item(&getting_started_item)
+                .item(&keyboard_shortcuts_item)
+                .separator()
+                .item(&report_issue_item)
+                .build()?;
+
+            let menu = MenuBuilder::new(app)
+                .item(&app_submenu)
+                .item(&file_submenu)
+                .item(&edit_submenu)
+                .item(&view_submenu)
+                .item(&window_submenu)
+                .item(&help_submenu)
+                .build()?;
+
+            app.set_menu(menu)?;
+
+            // Handle menu events
+            app.on_menu_event(move |app_handle, event| {
+                match event.id().as_ref() {
+                    "help" => {
+                        if let Some(window) = app_handle.get_webview_window("main") {
+                            let _ = window.emit("navigate", "/help");
+                        }
+                    }
+                    "getting_started" => {
+                        if let Some(window) = app_handle.get_webview_window("main") {
+                            let _ = window.emit("navigate", "/help/getting-started");
+                        }
+                    }
+                    "keyboard_shortcuts" => {
+                        if let Some(window) = app_handle.get_webview_window("main") {
+                            let _ = window.emit("navigate", "/help/shortcuts");
+                        }
+                    }
+                    "report_issue" => {
+                        let _ = Command::new("open")
+                            .arg("https://github.com/jmcconocha/project-watch/issues")
+                            .spawn();
+                    }
+                    _ => {}
+                }
+            });
+
+            // Create tray menu
+            let show_item = MenuItemBuilder::with_id("show", "Show Project Watch").build(app)?;
+            let quit_item = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
+
+            let tray_menu = Menu::with_items(app, &[&show_item, &quit_item])?;
 
             // Create tray icon
             let _tray = TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
-                .menu(&menu)
+                .menu(&tray_menu)
                 .show_menu_on_left_click(false)
                 .tooltip("Project Watch")
                 .on_menu_event(|app, event| {
