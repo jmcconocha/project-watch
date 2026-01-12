@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f172a"/>
+      <stop offset="100%" style="stop-color:#1e293b"/>
+    </linearGradient>
+    <linearGradient id="lemniscate" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#06b6d4"/>
+      <stop offset="50%" style="stop-color:#3b82f6"/>
+      <stop offset="100%" style="stop-color:#06b6d4"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="12" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background rounded square -->
+  <rect x="32" y="32" width="960" height="960" rx="180" ry="180" fill="url(#bg)"/>
+
+  <!-- Lemniscate (infinity symbol) - rotated 12 degrees uphill -->
+  <g transform="rotate(-12, 512, 512)">
+    <path
+      d="M 512 512
+         C 512 420 420 340 310 340
+         C 180 340 120 440 120 512
+         C 120 584 180 684 310 684
+         C 420 684 512 604 512 512
+         C 512 420 604 340 714 340
+         C 844 340 904 440 904 512
+         C 904 584 844 684 714 684
+         C 604 684 512 604 512 512Z"
+      fill="none"
+      stroke="url(#lemniscate)"
+      stroke-width="64"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      filter="url(#glow)"
+    />
+  </g>
+</svg>
