@@ -42,6 +42,7 @@ export const sampleSettings: Settings = {
     avatarUrl: 'https://avatars.githubusercontent.com/u/12345678',
     connectedAt: '2024-01-10T09:30:00Z',
     scopes: ['repo', 'read:user'],
+    accessToken: null,
   },
   editor: {
     selected: 'vscode',

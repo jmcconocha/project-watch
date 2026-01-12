@@ -1,24 +1,19 @@
-import { useState } from 'react'
 import {
   NotificationsSettings as NotificationsSettingsPanel,
-  sampleSettings,
   type NotificationSettings,
 } from '../../features/settings'
+import { useSettingsStore, toast } from '../../stores'
 
 export function NotificationsSettings() {
-  const [notifications, setNotifications] = useState<NotificationSettings>(
-    sampleSettings.notifications
-  )
+  const notifications = useSettingsStore((state) => state.notifications)
+  const updateNotifications = useSettingsStore((state) => state.updateNotifications)
 
   const handleNotificationChange = (
     key: keyof NotificationSettings,
     value: boolean | number
   ) => {
-    setNotifications((prev) => ({
-      ...prev,
-      [key]: value,
-    }))
-    console.log('Notification setting changed:', key, value)
+    updateNotifications({ [key]: value })
+    toast.success('Notification settings updated')
   }
 
   return (

@@ -5,19 +5,24 @@ import { MainNav } from './MainNav'
 import { UserMenu, type User } from './UserMenu'
 import { ThemeToggle } from './ThemeToggle'
 import { useIsDesktop } from '../../hooks'
+import { useSettingsStore } from '../../stores'
 
 export interface AppShellProps {
-  user?: User
   onLogout?: () => void
 }
 
-// Default user for development
-const defaultUser: User = {
-  name: 'Alex Chen',
-  email: 'alex@example.com',
-}
+export function AppShell({ onLogout }: AppShellProps) {
+  const github = useSettingsStore((state) => state.github)
 
-export function AppShell({ user = defaultUser, onLogout }: AppShellProps) {
+  // Use GitHub user info if connected, otherwise use local user
+  const user: User = github.isConnected && github.username
+    ? {
+        name: github.username,
+        avatarUrl: github.avatarUrl || undefined,
+      }
+    : {
+        name: 'jmcconocha',
+      }
   const isDesktop = useIsDesktop()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)

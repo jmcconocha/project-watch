@@ -2,15 +2,16 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Dashboard as DashboardView,
-  sampleProjects,
   type ViewMode,
   type DashboardFilters,
+  type Project,
 } from '../features/dashboard'
-import { useSettingsStore, toast } from '../stores'
+import { useProjectStore, useSettingsStore, toast } from '../stores'
 import { openInEditor, openInTerminal, openInFinder, openUrl } from '../services'
 
 export function Dashboard() {
   const navigate = useNavigate()
+  const boardProjects = useProjectStore((state) => state.projects)
   const editorId = useSettingsStore((state) => state.editorId)
   const [viewMode, setViewMode] = useState<ViewMode>('cards')
   const [filters, setFilters] = useState<DashboardFilters>({
@@ -18,6 +19,27 @@ export function Dashboard() {
     status: 'all',
     priority: 'all',
   })
+
+  // Map BoardProject to Dashboard Project format
+  const projects: Project[] = boardProjects.map((p) => ({
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    localPath: p.localPath,
+    githubUrl: p.githubUrl,
+    priority: 'none' as const,
+    status: p.status,
+    dueDate: null,
+    progress: p.status === 'completed' ? 100 : p.status === 'active' ? 50 : 0,
+    lastActivity: p.lastActivity,
+    git: {
+      branch: p.git.branch,
+      isDirty: p.git.isDirty,
+      commitsAhead: p.git.commitsAhead,
+      commitsBehind: p.git.commitsBehind,
+      openPRs: p.github.openPRs,
+    },
+  }))
 
   const handleNavigateToProject = (projectId: string) => {
     navigate(`/project/${projectId}`)
@@ -28,7 +50,7 @@ export function Dashboard() {
   }
 
   const handleOpenInEditor = async (projectId: string) => {
-    const project = sampleProjects.find((p) => p.id === projectId)
+    const project = projects.find((p) => p.id === projectId)
     if (project) {
       try {
         await openInEditor(project.localPath, editorId)
@@ -40,7 +62,7 @@ export function Dashboard() {
   }
 
   const handleOpenInFinder = async (projectId: string) => {
-    const project = sampleProjects.find((p) => p.id === projectId)
+    const project = projects.find((p) => p.id === projectId)
     if (project) {
       try {
         await openInFinder(project.localPath)
@@ -52,7 +74,7 @@ export function Dashboard() {
   }
 
   const handleOpenInTerminal = async (projectId: string) => {
-    const project = sampleProjects.find((p) => p.id === projectId)
+    const project = projects.find((p) => p.id === projectId)
     if (project) {
       try {
         await openInTerminal(project.localPath)
@@ -64,7 +86,7 @@ export function Dashboard() {
   }
 
   const handleOpenInGitHub = async (projectId: string) => {
-    const project = sampleProjects.find((p) => p.id === projectId)
+    const project = projects.find((p) => p.id === projectId)
     if (project?.githubUrl) {
       try {
         await openUrl(project.githubUrl)
@@ -76,7 +98,7 @@ export function Dashboard() {
   }
 
   const handleOpenInClaudeCode = async (projectId: string) => {
-    const project = sampleProjects.find((p) => p.id === projectId)
+    const project = projects.find((p) => p.id === projectId)
     if (project) {
       try {
         // Claude Code uses similar invocation to VS Code
@@ -90,7 +112,7 @@ export function Dashboard() {
 
   return (
     <DashboardView
-      projects={sampleProjects}
+      projects={projects}
       viewMode={viewMode}
       filters={filters}
       onChangeViewMode={setViewMode}

@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { FolderSearch, Loader2, Check, AlertCircle } from 'lucide-react'
 import {
   ProjectsSettings as ProjectsSettingsPanel,
-  sampleSettings,
   type ProjectFolder,
   type ManualProject,
 } from '../../features/settings'
@@ -11,12 +10,8 @@ import { pickFolder, scanFolderForProjects, getGitStatus } from '../../services'
 import type { BoardProject } from '../../features/projects-board'
 
 export function ProjectsSettings() {
-  const [projectFolders, setProjectFolders] = useState<ProjectFolder[]>(
-    sampleSettings.projectFolders
-  )
-  const [manualProjects, setManualProjects] = useState<ManualProject[]>(
-    sampleSettings.manualProjects
-  )
+  const [projectFolders, setProjectFolders] = useState<ProjectFolder[]>([])
+  const [manualProjects, setManualProjects] = useState<ManualProject[]>([])
   const [scanResults, setScanResults] = useState<{ path: string; count: number } | null>(null)
 
   const addProjects = useProjectStore((state) => state.addProjects)
