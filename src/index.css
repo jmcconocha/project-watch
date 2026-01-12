@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Configure dark mode to use class-based selector */
+@variant dark (&:where(.dark, .dark *));
+
 /* Custom theme configuration for Tailwind v4 */
 @theme {
   /* Font families */
