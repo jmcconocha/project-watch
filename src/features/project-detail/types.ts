@@ -73,10 +73,21 @@ export interface Task {
 // Component Props
 // =============================================================================
 
+// Extended task type with GitHub issue linking (matches store type)
+export interface LinkedTask extends Task {
+  githubIssueNumber?: number
+  githubIssueUrl?: string
+  githubIssueState?: 'open' | 'closed'
+  githubSyncedAt?: string
+  isFromGitHub?: boolean
+  assignee?: string
+  assigneeAvatarUrl?: string
+}
+
 export interface ProjectDetailViewProps {
   project: ProjectDetail
   columns: Column[]
-  tasks: Task[]
+  tasks: Task[] | LinkedTask[]
   onEditName?: (name: string) => void
   onEditStatus?: (status: ProjectStatus) => void
   onEditPriority?: (priority: ProjectPriority) => void
@@ -92,6 +103,11 @@ export interface ProjectDetailViewProps {
   onOpenInGitHub?: () => void
   onOpenInClaudeCode?: () => void
   onBack?: () => void
+  // GitHub integration props
+  onSyncGitHub?: () => void
+  isGitHubConnected?: boolean
+  syncStatus?: 'idle' | 'syncing' | 'error' | 'success'
+  lastSyncedAt?: string | null
 }
 
 // =============================================================================

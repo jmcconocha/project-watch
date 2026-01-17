@@ -1,4 +1,5 @@
 export * from './useGitRefresh'
 export * from './useGitHubRefresh'
+export * from './useGitHubIssuesSync'
 export * from './useMediaQuery'
 export * from './useTheme'

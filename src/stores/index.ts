@@ -1,4 +1,6 @@
 export { useProjectStore } from './projectStore'
 export { useSettingsStore } from './settingsStore'
 export { useToastStore, toast } from './toastStore'
+export { useTaskStore, defaultColumns, mapGitHubLabelToColumn, mapGitHubLabelToPriority } from './taskStore'
 export type { Toast, ToastType } from './toastStore'
+export type { LinkedTask, SyncStatus } from './taskStore'

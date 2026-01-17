@@ -42,7 +42,7 @@ export interface GitHubIssue {
   updated_at: string
   html_url: string
   labels: Array<{ name: string; color: string }>
-  assignees: Array<{ login: string }>
+  assignees: Array<{ login: string; avatar_url: string }>
 }
 
 export interface GitHubRepoStats {
@@ -196,4 +196,165 @@ export async function getRepoStats(
     myIssues,
     reviewRequests,
   }
+}
+
+// =============================================================================
+// Issue Management (Two-way Sync)
+// =============================================================================
+
+export interface CreateIssueParams {
+  title: string
+  body?: string
+  labels?: string[]
+  assignees?: string[]
+}
+
+export interface UpdateIssueParams {
+  title?: string
+  body?: string
+  state?: 'open' | 'closed'
+  labels?: string[]
+  assignees?: string[]
+}
+
+/**
+ * Create a new GitHub issue
+ */
+export async function createGitHubIssue(
+  token: string,
+  owner: string,
+  repo: string,
+  params: CreateIssueParams
+): Promise<GitHubIssue> {
+  const response = await fetch(
+    `${GITHUB_API_BASE}/repos/${owner}/${repo}/issues`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(params),
+    }
+  )
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(`GitHub API error: ${response.status} - ${error.message || 'Unknown error'}`)
+  }
+
+  return response.json()
+}
+
+/**
+ * Update an existing GitHub issue
+ */
+export async function updateGitHubIssue(
+  token: string,
+  owner: string,
+  repo: string,
+  issueNumber: number,
+  params: UpdateIssueParams
+): Promise<GitHubIssue> {
+  const response = await fetch(
+    `${GITHUB_API_BASE}/repos/${owner}/${repo}/issues/${issueNumber}`,
+    {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(params),
+    }
+  )
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(`GitHub API error: ${response.status} - ${error.message || 'Unknown error'}`)
+  }
+
+  return response.json()
+}
+
+/**
+ * Close a GitHub issue
+ */
+export async function closeGitHubIssue(
+  token: string,
+  owner: string,
+  repo: string,
+  issueNumber: number
+): Promise<GitHubIssue> {
+  return updateGitHubIssue(token, owner, repo, issueNumber, { state: 'closed' })
+}
+
+/**
+ * Reopen a GitHub issue
+ */
+export async function reopenGitHubIssue(
+  token: string,
+  owner: string,
+  repo: string,
+  issueNumber: number
+): Promise<GitHubIssue> {
+  return updateGitHubIssue(token, owner, repo, issueNumber, { state: 'open' })
+}
+
+/**
+ * Add a comment to a GitHub issue
+ */
+export async function addIssueComment(
+  token: string,
+  owner: string,
+  repo: string,
+  issueNumber: number,
+  body: string
+): Promise<{ id: number; body: string; created_at: string }> {
+  const response = await fetch(
+    `${GITHUB_API_BASE}/repos/${owner}/${repo}/issues/${issueNumber}/comments`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ body }),
+    }
+  )
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(`GitHub API error: ${response.status} - ${error.message || 'Unknown error'}`)
+  }
+
+  return response.json()
+}
+
+/**
+ * Get available labels for a repository
+ */
+export async function getRepoLabels(
+  token: string,
+  owner: string,
+  repo: string
+): Promise<Array<{ name: string; color: string; description: string | null }>> {
+  const response = await fetch(
+    `${GITHUB_API_BASE}/repos/${owner}/${repo}/labels?per_page=100`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github.v3+json',
+      },
+    }
+  )
+
+  if (!response.ok) {
+    if (response.status === 404) return []
+    throw new Error(`GitHub API error: ${response.status}`)
+  }
+
+  return response.json()
 }
