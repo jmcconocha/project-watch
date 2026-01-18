@@ -11,9 +11,11 @@ import {
   Calendar,
   ChevronDown,
   ArrowLeft,
+  RefreshCw,
+  Loader2,
 } from 'lucide-react'
-import type { ProjectDetailViewProps, ProjectStatus, ProjectPriority, Task } from '../types'
-import { statusConfig, priorityConfig, formatDate } from '../types'
+import type { ProjectDetailViewProps, ProjectStatus, ProjectPriority, Task, LinkedTask } from '../types'
+import { statusConfig, priorityConfig, formatDate, formatTimestamp } from '../types'
 import { KanbanColumn } from './KanbanColumn'
 import { GitStatusPanel } from './GitStatusPanel'
 import { NotesEditor } from './NotesEditor'
@@ -37,6 +39,10 @@ export function ProjectDetailView({
   onOpenInGitHub,
   onOpenInClaudeCode,
   onBack,
+  onSyncGitHub,
+  isGitHubConnected,
+  syncStatus,
+  lastSyncedAt,
 }: ProjectDetailViewProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null)
@@ -49,7 +55,7 @@ export function ProjectDetailView({
 
   // Group tasks by column
   const tasksByColumn = useMemo(() => {
-    const grouped: Record<string, Task[]> = {}
+    const grouped: Record<string, (Task | LinkedTask)[]> = {}
     columns.forEach((col) => {
       grouped[col.id] = tasks
         .filter((t) => t.columnId === col.id)
@@ -57,6 +63,11 @@ export function ProjectDetailView({
     })
     return grouped
   }, [columns, tasks])
+
+  // Count GitHub issues
+  const githubIssueCount = useMemo(() => {
+    return tasks.filter((t) => 'githubIssueNumber' in t && t.githubIssueNumber !== undefined).length
+  }, [tasks])
 
   const handleToggleSidebar = () => {
     setSidebarOpen(!sidebarOpen)
@@ -213,6 +224,47 @@ export function ProjectDetailView({
                 <Sparkles className="h-4 w-4" />
                 <span className="hidden sm:inline">Claude</span>
               </button>
+
+              {/* Divider */}
+              <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
+
+              {/* GitHub Sync Button */}
+              {project.githubUrl && (
+                <button
+                  onClick={onSyncGitHub}
+                  disabled={syncStatus === 'syncing'}
+                  className={`
+                    flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm
+                    transition-colors
+                    ${isGitHubConnected
+                      ? 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-cyan-600 dark:hover:text-cyan-400'
+                      : 'text-slate-400 dark:text-slate-500 cursor-not-allowed'
+                    }
+                    ${syncStatus === 'syncing' ? 'opacity-75' : ''}
+                  `}
+                  title={
+                    isGitHubConnected
+                      ? lastSyncedAt
+                        ? `Last synced ${formatTimestamp(lastSyncedAt)}`
+                        : 'Sync GitHub Issues'
+                      : 'GitHub not connected'
+                  }
+                >
+                  {syncStatus === 'syncing' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" />
+                  )}
+                  <span className="hidden sm:inline">
+                    {syncStatus === 'syncing' ? 'Syncing...' : 'Sync'}
+                  </span>
+                  {githubIssueCount > 0 && (
+                    <span className="ml-1 text-xs bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded-full">
+                      {githubIssueCount}
+                    </span>
+                  )}
+                </button>
+              )}
             </div>
           </div>
 

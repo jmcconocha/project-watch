@@ -1,11 +1,11 @@
 import { Plus } from 'lucide-react'
-import type { Column, Task } from '../types'
+import type { Column, Task, LinkedTask } from '../types'
 import { columnHeaderColors, columnAccentColors } from '../types'
 import { TaskCard } from './TaskCard'
 
 interface KanbanColumnProps {
   column: Column
-  tasks: Task[]
+  tasks: (Task | LinkedTask)[]
   onCreateTask?: () => void
   onEditTask?: (taskId: string) => void
   onDeleteTask?: (taskId: string) => void

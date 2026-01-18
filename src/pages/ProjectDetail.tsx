@@ -1,15 +1,15 @@
-import { useState, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ProjectDetailView,
-  sampleColumns,
   type Task,
   type ProjectStatus,
   type ProjectPriority,
   type ProjectDetail as ProjectDetailType,
 } from '../features/project-detail'
-import { useProjectStore, useSettingsStore, toast } from '../stores'
+import { useProjectStore, useSettingsStore, useTaskStore, toast, defaultColumns, type LinkedTask } from '../stores'
 import { openInEditor, openInTerminal, openInFinder, openUrl } from '../services'
+import { useGitHubIssuesSync } from '../hooks'
 
 export function ProjectDetail() {
   const { id } = useParams<{ id: string }>()
@@ -20,8 +20,38 @@ export function ProjectDetail() {
   )
   const updateProject = useProjectStore((state) => state.updateProject)
 
-  // Map BoardProject to ProjectDetail format
-  const mapToProjectDetail = (): ProjectDetailType | null => {
+  // Task store integration
+  const getTasks = useTaskStore((state) => state.getTasks)
+  const addTask = useTaskStore((state) => state.addTask)
+  const updateTask = useTaskStore((state) => state.updateTask)
+  const deleteTask = useTaskStore((state) => state.deleteTask)
+  const moveTask = useTaskStore((state) => state.moveTask)
+
+  // Get tasks for this project
+  const tasks = id ? getTasks(id) : []
+
+  // GitHub issues sync
+  const {
+    syncIssues,
+    updateIssue,
+    closeIssue,
+    reopenIssue,
+    syncStatus,
+    lastSyncedAt,
+    isGitHubConnected,
+  } = useGitHubIssuesSync({
+    projectId: id ?? '',
+    githubUrl: boardProject?.githubUrl ?? null,
+    enabled: !!id && !!boardProject?.githubUrl,
+    autoSync: true,
+  })
+
+  // Local state for editable fields that aren't persisted to the project store
+  const [localPriority, setLocalPriority] = useState<ProjectPriority>('none')
+  const [localNotes, setLocalNotes] = useState('')
+
+  // Map BoardProject to ProjectDetail format using useMemo instead of useEffect + setState
+  const project = useMemo((): ProjectDetailType | null => {
     if (!boardProject) return null
     return {
       id: boardProject.id,
@@ -29,10 +59,10 @@ export function ProjectDetail() {
       description: boardProject.description,
       localPath: boardProject.localPath,
       githubUrl: boardProject.githubUrl,
-      priority: 'none' as ProjectPriority,
+      priority: localPriority,
       status: boardProject.status,
       dueDate: null,
-      notes: '',
+      notes: localNotes,
       git: {
         branch: boardProject.git.branch,
         isDirty: boardProject.git.isDirty,
@@ -49,21 +79,10 @@ export function ProjectDetail() {
       github: {
         openPRs: [],
         openIssues: boardProject.github.openIssues,
-        lastSynced: new Date().toISOString(),
+        lastSynced: lastSyncedAt ?? new Date().toISOString(),
       },
     }
-  }
-
-  const [project, setProject] = useState<ProjectDetailType | null>(mapToProjectDetail)
-  const [tasks, setTasks] = useState<Task[]>([])
-
-  // Update project when boardProject changes
-  useEffect(() => {
-    const mapped = mapToProjectDetail()
-    if (mapped) {
-      setProject((prev) => prev ? { ...prev, ...mapped } : mapped)
-    }
-  }, [boardProject])
+  }, [boardProject, lastSyncedAt, localPriority, localNotes])
 
   if (!project) {
     return (
@@ -78,19 +97,17 @@ export function ProjectDetail() {
   }
 
   const handleEditName = (name: string) => {
-    setProject((prev) => prev ? { ...prev, name } : prev)
     if (id) updateProject(id, { name })
     toast.success('Project name updated')
   }
 
   const handleEditStatus = (status: ProjectStatus) => {
-    setProject((prev) => prev ? { ...prev, status } : prev)
     if (id) updateProject(id, { status })
     toast.success(`Status changed to ${status}`)
   }
 
   const handleEditPriority = (priority: ProjectPriority) => {
-    setProject((prev) => prev ? { ...prev, priority } : prev)
+    setLocalPriority(priority)
     toast.success(`Priority changed to ${priority}`)
   }
 
@@ -100,12 +117,14 @@ export function ProjectDetail() {
   }
 
   const handleSaveNotes = (notes: string) => {
-    setProject((prev) => prev ? { ...prev, notes } : prev)
+    setLocalNotes(notes)
     toast.success('Notes saved')
   }
 
   const handleCreateTask = (columnId: string) => {
-    const newTask: Task = {
+    if (!id) return
+
+    const newTask: LinkedTask = {
       id: `task-${Date.now()}`,
       columnId,
       title: 'New Task',
@@ -116,29 +135,67 @@ export function ProjectDetail() {
       createdAt: new Date().toISOString(),
       order: tasks.filter((t) => t.columnId === columnId).length,
     }
-    setTasks((prev) => [...prev, newTask])
+    addTask(id, newTask)
     toast.success('Task created')
   }
 
-  const handleEditTask = (taskId: string, updates: Partial<Task>) => {
-    setTasks((prev) =>
-      prev.map((task) => (task.id === taskId ? { ...task, ...updates } : task))
-    )
+  const handleEditTask = async (taskId: string, updates: Partial<Task>) => {
+    if (!id) return
+
+    // Find the current task
+    const currentTask = tasks.find((t) => t.id === taskId) as LinkedTask | undefined
+
+    // Update local state
+    updateTask(id, taskId, updates)
+
+    // If this is a GitHub-linked task and title changed, sync to GitHub
+    if (currentTask?.githubIssueNumber && updates.title && isGitHubConnected) {
+      const updatedTask = { ...currentTask, ...updates } as LinkedTask
+      await updateIssue(updatedTask)
+    }
   }
 
   const handleDeleteTask = (taskId: string) => {
-    setTasks((prev) => prev.filter((task) => task.id !== taskId))
+    if (!id) return
+
+    // Find the task to check if it's a GitHub issue
+    const task = tasks.find((t) => t.id === taskId) as LinkedTask | undefined
+
+    if (task?.isFromGitHub) {
+      toast.error('Cannot delete GitHub issues. Close them instead.')
+      return
+    }
+
+    deleteTask(id, taskId)
     toast.success('Task deleted')
   }
 
-  const handleMoveTask = (taskId: string, toColumnId: string, toOrder: number) => {
-    setTasks((prev) =>
-      prev.map((task) =>
-        task.id === taskId
-          ? { ...task, columnId: toColumnId, order: toOrder }
-          : task
-      )
-    )
+  const handleMoveTask = async (taskId: string, toColumnId: string, toOrder: number) => {
+    if (!id) return
+
+    // Find the current task
+    const currentTask = tasks.find((t) => t.id === taskId) as LinkedTask | undefined
+    const fromColumnId = currentTask?.columnId
+
+    // Move locally
+    moveTask(id, taskId, toColumnId, toOrder)
+
+    // If this is a GitHub-linked task, sync state changes
+    if (currentTask?.githubIssueNumber && isGitHubConnected) {
+      // Moving to 'done' should close the issue
+      if (toColumnId === 'done' && fromColumnId !== 'done') {
+        await closeIssue(currentTask)
+      }
+      // Moving from 'done' to another column should reopen the issue
+      else if (fromColumnId === 'done' && toColumnId !== 'done') {
+        await reopenIssue(currentTask)
+      }
+      // Otherwise just update labels
+      else {
+        const updatedTask = { ...currentTask, columnId: toColumnId, order: toOrder }
+        await updateIssue(updatedTask)
+      }
+    }
   }
 
   const handleOpenInEditor = async () => {
@@ -188,10 +245,22 @@ export function ProjectDetail() {
     }
   }
 
+  const handleSyncGitHub = async () => {
+    if (!isGitHubConnected) {
+      toast.error('GitHub not connected. Configure in Settings.')
+      return
+    }
+    toast.info('Syncing GitHub issues...')
+    await syncIssues()
+    if (syncStatus === 'success') {
+      toast.success('GitHub issues synced')
+    }
+  }
+
   return (
     <ProjectDetailView
       project={project}
-      columns={sampleColumns}
+      columns={defaultColumns}
       tasks={tasks}
       onEditName={handleEditName}
       onEditStatus={handleEditStatus}
@@ -208,6 +277,11 @@ export function ProjectDetail() {
       onOpenInGitHub={handleOpenInGitHub}
       onOpenInClaudeCode={handleOpenInClaudeCode}
       onBack={handleBack}
+      // New props for GitHub integration
+      onSyncGitHub={handleSyncGitHub}
+      isGitHubConnected={isGitHubConnected}
+      syncStatus={syncStatus}
+      lastSyncedAt={lastSyncedAt}
     />
   )
 }
