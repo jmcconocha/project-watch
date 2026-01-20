@@ -19,6 +19,7 @@ import { statusConfig, priorityConfig, formatDate, formatTimestamp } from '../ty
 import { KanbanColumn } from './KanbanColumn'
 import { GitStatusPanel } from './GitStatusPanel'
 import { NotesEditor } from './NotesEditor'
+import { DocumentationPanel } from './DocumentationPanel'
 
 export function ProjectDetailView({
   project,
@@ -388,6 +389,15 @@ export function ProjectDetailView({
             {/* Divider */}
             <hr className="border-slate-200 dark:border-slate-800" />
 
+            {/* Documentation Progress */}
+            <DocumentationPanel
+              projectId={project.id}
+              projectPath={project.localPath}
+            />
+
+            {/* Divider */}
+            <hr className="border-slate-200 dark:border-slate-800" />
+
             {/* Notes */}
             <NotesEditor
               notes={project.notes}
@@ -435,6 +445,15 @@ export function ProjectDetailView({
               git={project.git}
               github={project.github}
               githubUrl={project.githubUrl}
+            />
+
+            {/* Divider */}
+            <hr className="border-slate-200 dark:border-slate-800" />
+
+            {/* Documentation Progress */}
+            <DocumentationPanel
+              projectId={project.id}
+              projectPath={project.localPath}
             />
 
             {/* Divider */}

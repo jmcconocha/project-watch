@@ -94,3 +94,91 @@ export async function pickFolder(): Promise<string | null> {
   })
   return result as string | null
 }
+
+// Documentation parsing types (raw from Rust)
+export interface RawDocFileInfo {
+  path: string
+  name: string
+  relative_path: string
+}
+
+export interface RawStep {
+  content: string
+  is_completed: boolean
+}
+
+export interface RawStage {
+  name: string
+  steps: RawStep[]
+}
+
+export interface RawPhase {
+  name: string
+  order: number
+  status: string
+  stages: RawStage[]
+  progress: number
+}
+
+export interface RawProjectDocumentation {
+  phases: RawPhase[]
+  source_files: string[]
+  progress_percentage: number
+}
+
+// Discover documentation files in a project
+export async function discoverDocFiles(path: string): Promise<RawDocFileInfo[]> {
+  if (!isTauri()) {
+    console.log('[Mock] Discover doc files:', path)
+    return [
+      { path: `${path}/README.md`, name: 'README.md', relative_path: 'README.md' },
+      { path: `${path}/docs/spec.md`, name: 'spec.md', relative_path: 'docs/spec.md' },
+    ]
+  }
+  return await invoke<RawDocFileInfo[]>('discover_doc_files', { path })
+}
+
+// Parse project documentation
+export async function parseProjectDocs(path: string): Promise<RawProjectDocumentation> {
+  if (!isTauri()) {
+    console.log('[Mock] Parse project docs:', path)
+    return {
+      phases: [
+        {
+          name: 'Foundation',
+          order: 1,
+          status: 'completed',
+          stages: [
+            {
+              name: 'Setup',
+              steps: [
+                { content: 'Initialize project', is_completed: true },
+                { content: 'Add dependencies', is_completed: true },
+              ],
+            },
+          ],
+          progress: 100.0,
+        },
+        {
+          name: 'Development',
+          order: 2,
+          status: 'in-progress',
+          stages: [
+            {
+              name: 'Core Features',
+              steps: [
+                { content: 'Build main component', is_completed: true },
+                { content: 'Add routing', is_completed: false },
+                { content: 'Style components', is_completed: false },
+              ],
+            },
+          ],
+          progress: 33.3,
+        },
+      ],
+      source_files: ['README.md', 'docs/spec.md'],
+      progress_percentage: 50.0,
+    }
+  }
+  return await invoke<RawProjectDocumentation>('parse_project_docs', { path })
+}

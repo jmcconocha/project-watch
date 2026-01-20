@@ -1,10 +1,13 @@
 use std::process::Command;
+use std::path::Path;
 use serde::{Deserialize, Serialize};
 use tauri::{
     menu::{Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager, Emitter,
 };
+use regex::Regex;
+use walkdir::WalkDir;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GitStatus {
@@ -20,6 +23,42 @@ pub struct ProjectInfo {
     pub name: String,
     pub path: String,
     pub has_git: bool,
+}
+
+// Documentation parsing types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Step {
+    pub content: String,
+    pub is_completed: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Stage {
+    pub name: String,
+    pub steps: Vec<Step>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Phase {
+    pub name: String,
+    pub order: u32,
+    pub status: String,  // "not-started", "in-progress", "completed"
+    pub stages: Vec<Stage>,
+    pub progress: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectDocumentation {
+    pub phases: Vec<Phase>,
+    pub source_files: Vec<String>,
+    pub progress_percentage: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocFileInfo {
+    pub path: String,
+    pub name: String,
+    pub relative_path: String,
 }
 
 /// Open a folder in the system file manager (Finder on macOS)
@@ -255,6 +294,375 @@ fn scan_directory(
     Ok(())
 }
 
+/// Discover documentation files in a project directory
+#[tauri::command]
+fn discover_doc_files(path: String) -> Result<Vec<DocFileInfo>, String> {
+    let base_path = Path::new(&path);
+    let mut doc_files = Vec::new();
+    let mut seen_paths = std::collections::HashSet::new();
+
+    // Root-level documentation files to look for
+    let root_docs = ["README.md", "CLAUDE.md", "ROADMAP.md", "TODO.md", "CHANGELOG.md", "SPEC.md"];
+
+    // Check root-level files
+    for doc_name in &root_docs {
+        let doc_path = base_path.join(doc_name);
+        if doc_path.exists() && doc_path.is_file() {
+            let path_str = doc_path.to_string_lossy().to_string();
+            if seen_paths.insert(path_str.clone()) {
+                doc_files.push(DocFileInfo {
+                    path: path_str,
+                    name: doc_name.to_string(),
+                    relative_path: doc_name.to_string(),
+                });
+            }
+        }
+    }
+
+    // Directories to scan for documentation
+    let doc_dirs = [
+        "docs",
+        "specs",
+        ".claude",
+        "documentation",
+        "design-reference",
+        "instructions",
+        "planning",
+        "roadmap",
+    ];
+
+    // Helper function to scan a directory for markdown files
+    let scan_dir = |dir_path: &Path, prefix: &str, doc_files: &mut Vec<DocFileInfo>, seen_paths: &mut std::collections::HashSet<String>| {
+        if dir_path.exists() && dir_path.is_dir() {
+            for entry in WalkDir::new(dir_path)
+                .max_depth(5)
+                .into_iter()
+                .filter_map(|e| e.ok())
+            {
+                let entry_path = entry.path();
+                if entry_path.is_file() {
+                    if let Some(ext) = entry_path.extension() {
+                        if ext == "md" || ext == "markdown" {
+                            let path_str = entry_path.to_string_lossy().to_string();
+                            if seen_paths.insert(path_str.clone()) {
+                                let relative = if prefix.is_empty() {
+                                    entry_path
+                                        .strip_prefix(dir_path.parent().unwrap_or(dir_path))
+                                        .unwrap_or(entry_path)
+                                        .to_string_lossy()
+                                        .to_string()
+                                } else {
+                                    format!("{}/{}", prefix, entry_path
+                                        .strip_prefix(dir_path)
+                                        .unwrap_or(entry_path)
+                                        .to_string_lossy())
+                                };
+
+                                doc_files.push(DocFileInfo {
+                                    path: path_str,
+                                    name: entry_path
+                                        .file_name()
+                                        .map(|n| n.to_string_lossy().to_string())
+                                        .unwrap_or_default(),
+                                    relative_path: relative,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    };
+
+    // Scan doc directories in the project root
+    for dir_name in &doc_dirs {
+        let dir_path = base_path.join(dir_name);
+        scan_dir(&dir_path, dir_name, &mut doc_files, &mut seen_paths);
+    }
+
+    // Also check parent directory for documentation folders
+    // (handles monorepo structures where docs are at workspace root)
+    if let Some(parent_path) = base_path.parent() {
+        for dir_name in &doc_dirs {
+            let dir_path = parent_path.join(dir_name);
+            // Only scan if it exists and we haven't already scanned it
+            if dir_path.exists() && dir_path.is_dir() {
+                let parent_prefix = format!("../{}", dir_name);
+                scan_dir(&dir_path, &parent_prefix, &mut doc_files, &mut seen_paths);
+            }
+        }
+
+        // Also check parent's root documentation files
+        for doc_name in &root_docs {
+            let doc_path = parent_path.join(doc_name);
+            if doc_path.exists() && doc_path.is_file() {
+                let path_str = doc_path.to_string_lossy().to_string();
+                if seen_paths.insert(path_str.clone()) {
+                    doc_files.push(DocFileInfo {
+                        path: path_str,
+                        name: doc_name.to_string(),
+                        relative_path: format!("../{}", doc_name),
+                    });
+                }
+            }
+        }
+    }
+
+    Ok(doc_files)
+}
+
+/// Parse a single markdown file and extract phases, stages, and steps
+fn parse_markdown_file(content: &str, file_name: &str) -> Vec<Phase> {
+    let mut phases: Vec<Phase> = Vec::new();
+    let mut current_phase: Option<Phase> = None;
+    let mut current_stage: Option<Stage> = None;
+    let mut orphan_steps: Vec<Step> = Vec::new();
+    let mut last_h1_title: Option<String> = None;
+
+    // Regex patterns for detecting phase/milestone headers
+    // Matches: # Milestone N: Name, ## Phase N: Name, # Phase N - Name, etc.
+    let phase_re = Regex::new(r"^#{1,2}\s*(?:Milestone|Phase|Part|Step)\s*(\d+)[\s:.-]*(.+)$").unwrap();
+
+    // Regex for H1 headers (to use as fallback phase name)
+    let h1_re = Regex::new(r"^#\s+(.+)$").unwrap();
+
+    // Regex for stage/section headers (## or ### without phase keywords)
+    let stage_re = Regex::new(r"^#{2,3}\s+(.+)$").unwrap();
+
+    // Regex for checklist items - case insensitive for [x] and [X]
+    let checked_re = Regex::new(r"(?i)^\s*[-*]\s*\[[xX]\]\s*(.+)$").unwrap();
+    let unchecked_re = Regex::new(r"^\s*[-*]\s*\[\s*\]\s*(.+)$").unwrap();
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        // Check for H1 header (potential fallback title)
+        if let Some(caps) = h1_re.captures(trimmed) {
+            if !phase_re.is_match(trimmed) {
+                last_h1_title = Some(caps.get(1).map(|m| m.as_str().trim().to_string()).unwrap_or_default());
+            }
+        }
+
+        // Check for phase header
+        if let Some(caps) = phase_re.captures(trimmed) {
+            // Save current stage to current phase
+            if let Some(stage) = current_stage.take() {
+                if let Some(ref mut phase) = current_phase {
+                    phase.stages.push(stage);
+                }
+            }
+
+            // Save current phase
+            if let Some(phase) = current_phase.take() {
+                phases.push(phase);
+            }
+
+            let order: u32 = caps.get(1).map(|m| m.as_str().parse().unwrap_or(0)).unwrap_or(0);
+            let name = caps.get(2).map(|m| m.as_str().trim().to_string()).unwrap_or_default();
+
+            current_phase = Some(Phase {
+                name,
+                order,
+                status: "not-started".to_string(),
+                stages: Vec::new(),
+                progress: 0.0,
+            });
+            continue;
+        }
+
+        // Check for stage header (only if we're inside a phase or at start)
+        if let Some(caps) = stage_re.captures(trimmed) {
+            // Don't treat phase headers as stages
+            if phase_re.is_match(trimmed) {
+                continue;
+            }
+
+            // Save current stage
+            if let Some(stage) = current_stage.take() {
+                if let Some(ref mut phase) = current_phase {
+                    phase.stages.push(stage);
+                }
+            }
+
+            let name = caps.get(1).map(|m| m.as_str().trim().to_string()).unwrap_or_default();
+            current_stage = Some(Stage {
+                name,
+                steps: Vec::new(),
+            });
+            continue;
+        }
+
+        // Check for checklist items
+        if let Some(caps) = checked_re.captures(line) {
+            let content = caps.get(1).map(|m| m.as_str().trim().to_string()).unwrap_or_default();
+            let step = Step {
+                content,
+                is_completed: true,
+            };
+
+            if let Some(ref mut stage) = current_stage {
+                stage.steps.push(step);
+            } else if let Some(ref mut phase) = current_phase {
+                // Create a default stage if none exists
+                if phase.stages.is_empty() {
+                    phase.stages.push(Stage {
+                        name: "Tasks".to_string(),
+                        steps: Vec::new(),
+                    });
+                }
+                if let Some(last_stage) = phase.stages.last_mut() {
+                    last_stage.steps.push(step);
+                }
+            } else {
+                // Collect orphan steps (no phase context yet)
+                orphan_steps.push(step);
+            }
+            continue;
+        }
+
+        if let Some(caps) = unchecked_re.captures(line) {
+            let content = caps.get(1).map(|m| m.as_str().trim().to_string()).unwrap_or_default();
+            let step = Step {
+                content,
+                is_completed: false,
+            };
+
+            if let Some(ref mut stage) = current_stage {
+                stage.steps.push(step);
+            } else if let Some(ref mut phase) = current_phase {
+                if phase.stages.is_empty() {
+                    phase.stages.push(Stage {
+                        name: "Tasks".to_string(),
+                        steps: Vec::new(),
+                    });
+                }
+                if let Some(last_stage) = phase.stages.last_mut() {
+                    last_stage.steps.push(step);
+                }
+            } else {
+                // Collect orphan steps (no phase context yet)
+                orphan_steps.push(step);
+            }
+        }
+    }
+
+    // Save any remaining stage and phase
+    if let Some(stage) = current_stage.take() {
+        if let Some(ref mut phase) = current_phase {
+            phase.stages.push(stage);
+        }
+    }
+
+    if let Some(phase) = current_phase.take() {
+        phases.push(phase);
+    }
+
+    // If we have orphan steps but no phases, create a phase from the file
+    if !orphan_steps.is_empty() && phases.is_empty() {
+        let phase_name = last_h1_title
+            .unwrap_or_else(|| {
+                // Use file name without extension as fallback
+                file_name.trim_end_matches(".md")
+                    .trim_end_matches(".markdown")
+                    .to_string()
+            });
+
+        phases.push(Phase {
+            name: phase_name,
+            order: 0,
+            status: "not-started".to_string(),
+            stages: vec![Stage {
+                name: "Tasks".to_string(),
+                steps: orphan_steps,
+            }],
+            progress: 0.0,
+        });
+    }
+
+    // Calculate progress for each phase
+    for phase in &mut phases {
+        let mut total_steps = 0;
+        let mut completed_steps = 0;
+
+        for stage in &phase.stages {
+            for step in &stage.steps {
+                total_steps += 1;
+                if step.is_completed {
+                    completed_steps += 1;
+                }
+            }
+        }
+
+        if total_steps > 0 {
+            phase.progress = (completed_steps as f32 / total_steps as f32) * 100.0;
+
+            // Determine status based on progress
+            if phase.progress >= 100.0 {
+                phase.status = "completed".to_string();
+            } else if phase.progress > 0.0 {
+                phase.status = "in-progress".to_string();
+            } else {
+                phase.status = "not-started".to_string();
+            }
+        }
+    }
+
+    phases
+}
+
+/// Parse project documentation files and extract structured information
+#[tauri::command]
+fn parse_project_docs(path: String) -> Result<ProjectDocumentation, String> {
+    // First, discover all doc files
+    let doc_files = discover_doc_files(path.clone())?;
+
+    let mut all_phases: Vec<Phase> = Vec::new();
+    let mut source_files: Vec<String> = Vec::new();
+
+    // Parse each discovered file
+    for doc_file in &doc_files {
+        let content = std::fs::read_to_string(&doc_file.path)
+            .map_err(|e| format!("Failed to read {}: {}", doc_file.path, e))?;
+
+        let phases = parse_markdown_file(&content, &doc_file.name);
+
+        if !phases.is_empty() {
+            source_files.push(doc_file.relative_path.clone());
+            all_phases.extend(phases);
+        }
+    }
+
+    // Sort phases by order
+    all_phases.sort_by(|a, b| a.order.cmp(&b.order));
+
+    // Calculate overall progress
+    let mut total_steps = 0;
+    let mut completed_steps = 0;
+
+    for phase in &all_phases {
+        for stage in &phase.stages {
+            for step in &stage.steps {
+                total_steps += 1;
+                if step.is_completed {
+                    completed_steps += 1;
+                }
+            }
+        }
+    }
+
+    let progress_percentage = if total_steps > 0 {
+        (completed_steps as f32 / total_steps as f32) * 100.0
+    } else {
+        0.0
+    };
+
+    Ok(ProjectDocumentation {
+        phases: all_phases,
+        source_files,
+        progress_percentage,
+    })
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -418,6 +826,8 @@ pub fn run() {
             open_url,
             get_git_status,
             scan_folder_for_projects,
+            discover_doc_files,
+            parse_project_docs,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

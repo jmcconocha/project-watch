@@ -80,6 +80,7 @@ name = "app"
 version = "2.0.0"
 dependencies = [
  "log",
+ "regex",
  "serde",
  "serde_json",
  "tauri",
@@ -89,6 +90,7 @@ dependencies = [
  "tauri-plugin-log",
  "tauri-plugin-notification",
  "tauri-plugin-shell",
+ "walkdir",
 ]
 
 [[package]]

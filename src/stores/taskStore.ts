@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { Task, Column } from '../features/project-detail/types'
 
-// Extended task type with GitHub issue linking
+// Extended task type with GitHub issue linking and documentation source
 export interface LinkedTask extends Task {
   // GitHub issue linking
   githubIssueNumber?: number
@@ -10,6 +10,10 @@ export interface LinkedTask extends Task {
   githubIssueState?: 'open' | 'closed'
   githubSyncedAt?: string
   isFromGitHub?: boolean
+  // Documentation linking
+  isFromDocumentation?: boolean
+  documentationSource?: string  // e.g., "Phase 1: Foundation > Quality Checklist"
+  documentationStepId?: string  // unique ID to track the step
   // Assignee from GitHub
   assignee?: string
   assigneeAvatarUrl?: string
@@ -40,6 +44,7 @@ interface TaskStore {
   // Bulk operations
   setTasks: (projectId: string, tasks: LinkedTask[]) => void
   mergeTasks: (projectId: string, tasks: LinkedTask[]) => void
+  mergeDocumentationTasks: (projectId: string, tasks: LinkedTask[]) => void
   clearTasks: (projectId: string) => void
 
   // GitHub sync tracking
@@ -241,6 +246,65 @@ export const useTaskStore = create<TaskStore>()(
                 tasks: mergedTasks,
                 lastModified: new Date().toISOString(),
                 githubSyncedAt: new Date().toISOString(),
+              },
+            },
+          }
+        }),
+
+      // Merge documentation tasks (adds new, updates existing by step ID)
+      mergeDocumentationTasks: (projectId, newTasks) =>
+        set((state) => {
+          const projectTasks = state.tasksByProject[projectId] ?? { tasks: [], lastModified: new Date().toISOString() }
+          const existingTasks = projectTasks.tasks
+
+          // Build a map of existing documentation-linked tasks by step ID
+          const docTaskMap = new Map<string, LinkedTask>()
+          existingTasks.forEach((task) => {
+            if (task.documentationStepId) {
+              docTaskMap.set(task.documentationStepId, task)
+            }
+          })
+
+          // Process new tasks
+          const mergedTasks: LinkedTask[] = []
+          const processedStepIds = new Set<string>()
+
+          // First, add all non-documentation tasks
+          existingTasks.forEach((task) => {
+            if (!task.isFromDocumentation) {
+              mergedTasks.push(task)
+            }
+          })
+
+          // Then merge documentation tasks
+          newTasks.forEach((newTask) => {
+            if (newTask.documentationStepId) {
+              processedStepIds.add(newTask.documentationStepId)
+              const existing = docTaskMap.get(newTask.documentationStepId)
+              if (existing) {
+                // Update existing task but preserve local column position if manually moved
+                // Only update the completion status from docs
+                mergedTasks.push({
+                  ...existing,
+                  title: newTask.title, // Update title in case it changed
+                  documentationSource: newTask.documentationSource,
+                  // Keep the column position - don't auto-move based on completion
+                })
+              } else {
+                // Add new task
+                mergedTasks.push(newTask)
+              }
+            } else {
+              mergedTasks.push(newTask)
+            }
+          })
+
+          return {
+            tasksByProject: {
+              ...state.tasksByProject,
+              [projectId]: {
+                tasks: mergedTasks,
+                lastModified: new Date().toISOString(),
               },
             },
           }
